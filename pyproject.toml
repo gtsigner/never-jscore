@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "never-jscore"
 version = "1.0.0"
 description = "Fast JavaScript execution in Python using Deno Core (PyExecJS replacement)"
-readme = "READMD.md"
+readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 keywords = ["javascript", "execjs", "deno", "v8", "js","python","rust"]
