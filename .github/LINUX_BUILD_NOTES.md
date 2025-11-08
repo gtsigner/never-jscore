@@ -1,12 +1,36 @@
 # Linux 构建说明
 
-## 当前方案：manylinux2014 + 预编译 V8
+## ✅ 当前方案：musllinux + 预编译 V8
 
-使用 manylinux2014 和预编译 V8 以避免：
-1. V8 142.1.0 从源码构建失败（缺少 `build/rust/known-target-triples.txt`）
-2. 从源码编译 V8 需要 240+ 分钟
+**使用 musllinux_1_2 和预编译 V8** 以完全避免 glibc TLS 问题。
 
-## 如果构建失败的备选方案
+### 为什么选择 musllinux
+
+musllinux 使用 musl libc 而不是 glibc，具有以下优势：
+1. **完全静态链接**：避免所有动态链接和 TLS 问题
+2. **无 TLS 模型冲突**：musl 不使用 `initial-exec` TLS 模型
+3. **更小的二进制**：静态链接后体积更小
+4. **更好的可移植性**：可在任何 Linux 发行版运行
+
+### 已避免的问题
+
+✅ 不再需要从源码编译 V8（避免 240+ 分钟构建时间）
+✅ 不再需要 V8 142.1.0 源码构建（避免 `build/rust/known-target-triples.txt` 缺失）
+✅ 完全避免 glibc TLS 链接错误：
+```
+error: relocation R_X86_64_TPOFF32 against v8::internal::g_current_isolate_
+cannot be used with -shared
+```
+
+### 当前构建配置
+
+```yaml
+manylinux: musllinux_1_2
+V8_FROM_SOURCE: 0
+RUSTFLAGS: "-C target-feature=+crt-static -C link-arg=-static-libgcc"
+```
+
+## 如果 musllinux 构建失败的备选方案
 
 ### 方案 A：降级 deno_core 版本
 

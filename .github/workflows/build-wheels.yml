@@ -76,53 +76,50 @@ jobs:
           echo "LIBCLANG_PATH=$LIBCLANG_PATH" >> $GITHUB_ENV
           echo "Found libclang at: $LIBCLANG_PATH"
 
-      # 缓存 Rust 和 V8 预编译二进制
+      # 缓存 Rust 和 V8 预编译二进制（musllinux）
       - name: Cache V8 and Rust dependencies
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/git
             ~/.cargo/registry
-          key: v8-prebuilt-linux-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+          key: v8-musllinux-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            v8-prebuilt-linux-${{ matrix.target }}-
+            v8-musllinux-${{ matrix.target }}-
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter
-          manylinux: 2014  # 使用 manylinux2014 以获得更好的兼容性
-          container: ${{ matrix.target == 'aarch64' && 'messense/manylinux2014-cross:aarch64' || 'off' }}
+          manylinux: musllinux_1_2  # 使用 musllinux 避免 glibc TLS 问题
+          container: ${{ matrix.target == 'aarch64' && 'messense/musllinux_1_2-cross:aarch64' || 'off' }}
           before-script-linux: |
             set -e
 
-            # 在 manylinux 容器中安装必要工具
-            if command -v yum &> /dev/null; then
-              echo "=== Setting up manylinux2014 container ==="
-              yum install -y clang llvm-devel cmake glibc-devel glibc-headers \
-                kernel-headers gcc-c++ python3 git curl unzip wget
-
-              # 保存工作目录
-              WORK_DIR=$(pwd)
+            # musllinux 容器设置
+            if command -v apk &> /dev/null; then
+              echo "=== Setting up musllinux (Alpine) container ==="
+              apk add --no-cache gcc musl-dev libffi-dev openssl-dev
 
               echo "=== Tool versions in container ==="
               python3 --version
               rustc --version
-              clang --version || echo "clang not available"
+              gcc --version
             fi
 
-            # 使用预编译 V8（manylinux2014 对 TLS 更宽容）
+            # 使用预编译 V8（musllinux 完全静态链接，避免 TLS 问题）
             export V8_FROM_SOURCE=0
             export CARGO_NET_GIT_FETCH_WITH_CLI=true
             export RUST_BACKTRACE=full
 
-            echo "=== V8 Build Configuration ==="
+            echo "=== Build Configuration ==="
             echo "V8_FROM_SOURCE=$V8_FROM_SOURCE"
             echo "Target: ${{ matrix.target }}"
+            echo "Using musllinux (static linking)"
         env:
           V8_FROM_SOURCE: "0"
-          RUSTFLAGS: "-C link-arg=-Wl,--no-as-needed"
+          RUSTFLAGS: "-C target-feature=+crt-static -C link-arg=-static-libgcc"
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
       - name: List built wheels
