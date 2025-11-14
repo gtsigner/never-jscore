@@ -22,6 +22,7 @@
 - 🎯 **JS 逆向优化**：专为补环境设计，无需额外 polyfill
 - 📦 **上下文隔离**：每个 Context 独立的 V8 执行环境
 - 🛡️ **类型安全**：完整的类型提示（.pyi 文件）
+- 具体使用案例可看tests文件夹
 
 ## 性能对比
 
@@ -432,53 +433,11 @@ result = ctx.evaluate("""
 ```
 
 ## 更新日志
+### v2.4.0 (2025-11-14) - Timer 修复与 API 说明
+- ✨ 新增Blob对象,以及完善URL方法,URLSearchParams等
+- ✨ 新增内置api__neverjscore_clear_all_timers__() //清除所有定时器
+- 🔧 重构__neverjscore_return__() // hook函数
 
-### v2.3.2 (2025-11-14) - Timer 修复与 API 说明
-
-- 🐛 **修复 Timer Reactor 错误**：修复了 setTimeout/setInterval 在某些场景下的 "no reactor running" 崩溃问题
-  - 从 `tokio::sync::oneshot` 改为使用 `tokio::time::sleep`
-  - 确保 timer 在 Tokio runtime 上下文中正确执行
-- 📚 **compile() vs evaluate() 说明**：
-  - `compile()` - 用于**定义函数和变量**，只运行微任务队列，**不等待 setTimeout**
-  - `evaluate()` / `eval()` - 用于**执行异步代码**，运行完整 event loop，**会等待 setTimeout/Promise**
-  - ⚠️ **重要**：如果代码顶层有 `setTimeout` 调用，应使用 `evaluate()` 而非 `compile()`
-- 🔧 改进错误提示和文档说明
-
-**使用示例**：
-```python
-import never_jscore
-
-ctx = never_jscore.Context(enable_extensions=True)
-
-# ❌ 错误：compile 不等待 setTimeout
-ctx.compile("""
-    setTimeout(() => {
-        console.log('这不会执行');
-    }, 1000);
-""")
-
-# ✅ 正确：evaluate 会等待 setTimeout
-ctx.evaluate("""
-    (async () => {
-        await new Promise(resolve => {
-            setTimeout(() => {
-                console.log('这会执行');
-                resolve();
-            }, 1000);
-        });
-    })()
-""")
-
-# ✅ 推荐：compile 定义函数，call 调用
-ctx.compile("""
-    function waitAndReturn(value) {
-        return new Promise(resolve => {
-            setTimeout(() => resolve(value), 1000);
-        });
-    }
-""")
-result = ctx.call("waitAndReturn", ["hello"])  # 自动等待 Promise
-```
 
 ### v2.3.1 (2025-11-13) - 多线程完善
 
