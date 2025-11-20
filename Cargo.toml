@@ -13,12 +13,16 @@ categories = ["development-tools"]
 name = "never_jscore"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["python"]
+python = ["dep:pyo3"]
+
 [dependencies]
 deno_core = "0.367.0"
 anyhow = "1.0.100"
 tokio = { version = "1.48", features = ["rt","time", "macros"] }
 serde_json = "1.0"
-pyo3 = { version = "0.27.1", features = ["extension-module", "abi3-py38"] }
+pyo3 = { version = "0.27.1", features = ["extension-module", "abi3-py38"], optional = true }
 # Crypto libraries for JS reverse engineering
 base64 = "0.22"
 md-5 = "0.10"

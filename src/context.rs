@@ -1,13 +1,17 @@
 use anyhow::{Result, anyhow};
 use deno_core::{JsRuntime, RuntimeOptions, error::JsError};
+#[cfg(feature = "python")]
 use pyo3::exceptions::PyException;
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
 use pyo3::types::{PyDict, PyList};
 use serde_json::Value as JsonValue;
 use std::cell::RefCell;
 use std::rc::Rc;
 use rand::SeedableRng;
 
+#[cfg(feature = "python")]
 use crate::convert::{json_to_python, python_to_json};
 use crate::ops;
 use crate::runtime::run_with_tokio;
@@ -39,7 +43,7 @@ struct PermissionsContainer;
 /// ctx.eval("function add(a, b) { return a + b; }")
 /// result = ctx.call("add", [1, 2])
 /// ```
-#[pyclass(unsendable)]
+#[cfg_attr(feature = "python", pyclass(unsendable))]
 pub struct Context {
     runtime: RefCell<JsRuntime>,
     result_storage: Rc<ResultStorage>,
@@ -187,7 +191,7 @@ impl Context {
     /// * `enable_extensions` - 是否启用扩展（crypto, encoding 等）
     /// * `enable_logging` - 是否启用操作日志输出
     /// * `random_seed` - 随机数种子（可选）。如果提供，所有随机数 API 将使用固定种子
-    pub fn new(enable_extensions: bool, enable_logging: bool, random_seed: Option<u32>) -> PyResult<Self> {
+    pub fn new(enable_extensions: bool, enable_logging: bool, random_seed: Option<u32>) -> Result<Self> {
         let storage = Rc::new(ResultStorage::new());
 
         let mut extensions = vec![
@@ -327,7 +331,7 @@ impl Context {
     /// 执行脚本，将代码加入全局作用域（不返回值）
     ///
     /// 这个方法会直接执行代码并将定义的函数/变量加入全局作用域
-    fn exec_script(&self, code: &str) -> Result<()> {
+    pub(crate) fn exec_script(&self, code: &str) -> Result<()> {
         // Ensure polyfill is loaded before first execution
         self.ensure_polyfill_loaded()?;
 
@@ -380,7 +384,7 @@ impl Context {
     /// - 当 JS 调用 __neverjscore_return__(value) 时，会抛出 EarlyReturnError
     /// - 该错误会携带返回值并中断 JS 执行
     /// - Rust 侧通过 downcast 检测并提取返回值
-    fn execute_js(&self, code: &str, auto_await: bool) -> Result<String> {
+    pub(crate) fn execute_js(&self, code: &str, auto_await: bool) -> Result<String> {
         // Ensure polyfill is loaded before first execution
         self.ensure_polyfill_loaded()?;
 
@@ -562,7 +566,7 @@ impl Context {
 
 
     /// 请求垃圾回收
-    fn request_gc(&self) -> Result<()> {
+    pub fn request_gc(&self) -> Result<()> {
         self.enter_isolate();
         let mut runtime = self.runtime.borrow_mut();
         let _ =
@@ -575,7 +579,7 @@ impl Context {
     /// 获取 V8 堆内存统计信息
     ///
     /// 返回当前 JavaScript 运行时的内存使用情况，包括总堆大小、已用大小等详细指标
-    fn get_heap_stats(&self) -> Result<std::collections::HashMap<String, usize>> {
+    pub fn get_heap_stats(&self) -> Result<std::collections::HashMap<String, usize>> {
         self.enter_isolate();
         let mut runtime = self.runtime.borrow_mut();
 
@@ -601,6 +605,15 @@ impl Context {
 
         Ok(stats)
     }
+    /// 获取执行统计信息
+    pub fn get_exec_count(&self) -> usize {
+        *self.exec_count.borrow()
+    }
+
+    /// 重置统计信息
+    pub fn reset_exec_count(&self) {
+        *self.exec_count.borrow_mut() = 0;
+    }
 }
 
 impl Drop for Context {
@@ -615,6 +628,7 @@ impl Drop for Context {
 // Python Methods
 // ============================================
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl Context {
     /// Python构造函数
@@ -663,6 +677,7 @@ impl Context {
     fn py_new(enable_extensions: bool, enable_logging: bool, random_seed: Option<u32>) -> PyResult<Self> {
         crate::runtime::ensure_v8_initialized();
         Self::new(enable_extensions, enable_logging, random_seed)
+            .map_err(|e| PyException::new_err(format!("Failed to create context: {}", e)))
     }
 
     /// 编译JavaScript代码（便捷方法）

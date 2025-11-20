@@ -1,4 +1,5 @@
 mod context;
+#[cfg(feature = "python")]
 mod convert;
 mod ops;
 mod runtime;
@@ -14,7 +15,9 @@ mod fetch_ops;
 mod performance_ops;
 mod random_state;  // New: Seedable RNG state management
 mod random_ops;     // New: Random seed control operations
+pub mod ffi;          // C FFI interface
 
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
 use std::sync::Once;
 
@@ -55,6 +58,7 @@ fn ensure_v8_initialized() {
 ///     ctx2 = never_jscore.Context()
 ///     # ctx1 和 ctx2 完全隔离，互不影响
 ///     ```
+#[cfg(feature = "python")]
 #[pymodule]
 fn never_jscore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Initialize V8 platform when module is first imported
