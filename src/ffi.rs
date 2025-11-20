@@ -101,41 +101,28 @@ pub extern "C" fn never_jscore_compile(
     never_jscore_exec(ptr, code)
 }
 
-// --- New methods for parity with Python ---
-
 #[no_mangle]
-pub extern "C" fn never_jscore_gc(ptr: ContextPtr) -> i32 {
-    if ptr.is_null() {
-        return -1;
-    }
-    let ctx = unsafe { &*ptr };
-    match ctx.request_gc() {
-        Ok(_) => 0,
-        Err(_) => -1,
+pub extern "C" fn never_jscore_gc(ptr: ContextPtr) {
+    if !ptr.is_null() {
+        let ctx = unsafe { &*ptr };
+        let _ = ctx.request_gc();
     }
 }
 
 #[no_mangle]
 pub extern "C" fn never_jscore_get_stats(ptr: ContextPtr) -> usize {
-    if ptr.is_null() {
-        return 0;
+    if !ptr.is_null() {
+        let ctx = unsafe { &*ptr };
+        return ctx.get_exec_count();
     }
-    let ctx = unsafe { &*ptr };
-    match ctx.get_stats() {
-        Ok((count,)) => count,
-        Err(_) => 0,
-    }
+    0
 }
 
 #[no_mangle]
-pub extern "C" fn never_jscore_reset_stats(ptr: ContextPtr) -> i32 {
-    if ptr.is_null() {
-        return -1;
-    }
-    let ctx = unsafe { &*ptr };
-    match ctx.reset_stats() {
-        Ok(_) => 0,
-        Err(_) => -1,
+pub extern "C" fn never_jscore_reset_stats(ptr: ContextPtr) {
+    if !ptr.is_null() {
+        let ctx = unsafe { &*ptr };
+        ctx.reset_exec_count();
     }
 }
 
@@ -147,14 +134,15 @@ pub extern "C" fn never_jscore_get_heap_statistics(ptr: ContextPtr) -> *mut c_ch
     let ctx = unsafe { &*ptr };
     match ctx.get_heap_stats() {
         Ok(stats) => {
-            // Serialize HashMap to JSON string
+            // Convert HashMap to JSON string manually or using serde_json
+            // Since stats is HashMap<String, usize>, simple serde serialization works
             match serde_json::to_string(&stats) {
                 Ok(json) => {
                     match CString::new(json) {
                         Ok(c_string) => c_string.into_raw(),
                         Err(_) => std::ptr::null_mut(),
                     }
-                },
+                }
                 Err(_) => std::ptr::null_mut(),
             }
         },
@@ -163,21 +151,18 @@ pub extern "C" fn never_jscore_get_heap_statistics(ptr: ContextPtr) -> *mut c_ch
 }
 
 #[no_mangle]
-pub extern "C" fn never_jscore_take_heap_snapshot(
-    ptr: ContextPtr,
-    file_path: *const c_char,
-) -> i32 {
+pub extern "C" fn never_jscore_take_heap_snapshot(ptr: ContextPtr, file_path: *const c_char) -> i32 {
     if ptr.is_null() || file_path.is_null() {
         return -1;
     }
     let ctx = unsafe { &*ptr };
-    let c_str = unsafe { CStr::from_ptr(file_path) };
-    let path_str = match c_str.to_str() {
-        Ok(s) => s,
+    let c_path = unsafe { CStr::from_ptr(file_path) };
+    let path_str = match c_path.to_str() {
+        Ok(s) => s.to_string(),
         Err(_) => return -1,
     };
 
-    match ctx.take_heap_snapshot(path_str.to_string()) {
+    match ctx.take_heap_snapshot(path_str) {
         Ok(_) => 0,
         Err(_) => -1,
     }

@@ -614,6 +614,37 @@ impl Context {
     pub fn reset_exec_count(&self) {
         *self.exec_count.borrow_mut() = 0;
     }
+
+    /// 导出 V8 堆快照到文件
+    ///
+    /// 导出完整的堆内存快照，可以用 Chrome DevTools 加载分析。
+    pub fn take_heap_snapshot(&self, file_path: String) -> Result<()> {
+        use std::io::Write;
+
+        self.enter_isolate();
+        let mut runtime = self.runtime.borrow_mut();
+        let isolate = runtime.v8_isolate();
+
+        // 创建输出文件
+        let file = std::fs::File::create(&file_path)
+            .map_err(|e| anyhow!("Cannot create file '{}': {}", file_path, e))?;
+
+        let mut writer = std::io::BufWriter::new(file);
+
+        // V8 会分多次调用回调函数，每次传递一块快照数据
+        isolate.take_heap_snapshot(|chunk: &[u8]| {
+            writer.write_all(chunk).is_ok()
+        });
+
+        // 确保所有数据写入磁盘
+        writer.flush()
+            .map_err(|e| anyhow!("Failed to write snapshot: {}", e))?;
+
+        drop(runtime);
+        self.exit_isolate();
+
+        Ok(())
+    }
 }
 
 impl Drop for Context {
@@ -941,32 +972,11 @@ impl Context {
     ///     - 可以对比两个快照找内存泄漏（before/after）
     ///     - 搜索已知字符串可以快速定位关键对象
     ///     - 查看对象的 Retainers 了解为什么对象没有被回收
-    fn take_heap_snapshot(&self, file_path: String) -> PyResult<()> {
-        use std::io::Write;
-
-        self.enter_isolate();
-        let mut runtime = self.runtime.borrow_mut();
-        let isolate = runtime.v8_isolate();
-
-        // 创建输出文件
-        let file = std::fs::File::create(&file_path)
-            .map_err(|e| PyException::new_err(format!("Cannot create file '{}': {}", file_path, e)))?;
-
-        let mut writer = std::io::BufWriter::new(file);
-
-        // V8 会分多次调用回调函数，每次传递一块快照数据
-        isolate.take_heap_snapshot(|chunk: &[u8]| {
-            writer.write_all(chunk).is_ok()
-        });
-
-        // 确保所有数据写入磁盘
-        writer.flush()
-            .map_err(|e| PyException::new_err(format!("Failed to write snapshot: {}", e)))?;
-
-        drop(runtime);
-        self.exit_isolate();
-
-        Ok(())
+    #[cfg(feature = "python")]
+    #[pyo3(name = "take_heap_snapshot")]
+    fn py_take_heap_snapshot(&self, file_path: String) -> PyResult<()> {
+        self.take_heap_snapshot(file_path)
+            .map_err(|e| PyException::new_err(format!("Snapshot error: {}", e)))
     }
 
     /// 上下文管理器支持：__enter__
