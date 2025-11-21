@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/never_jscore/go_mod/never_jscore"
+
+	"github.com/gtsigner/never-jscore/go_mod/never_jscore"
 )
 
 func main() {
