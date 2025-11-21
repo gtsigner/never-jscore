@@ -1,0 +1,54 @@
+name: build-go-libs
+
+on:
+  push:
+    tags:
+      - 'go/v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-13    # darwin x86_64
+            target: x86_64-apple-darwin
+          - os: macos-14    # darwin arm64
+            target: aarch64-apple-darwin
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+
+      - name: Build
+        run: cargo build --release --no-default-features --target ${{ matrix.target }}
+
+      - name: Copy artifacts
+        run: |
+          mkdir -p go_mod/never_jscore/lib/${{ matrix.target }}
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            cp target/${{ matrix.target }}/release/never_jscore.dll go_mod/never_jscore/lib/${{ matrix.target }}/
+            cp target/${{ matrix.target }}/release/never_jscore.lib go_mod/never_jscore/lib/${{ matrix.target }}/
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            cp target/${{ matrix.target }}/release/libnever_jscore.a go_mod/never_jscore/lib/${{ matrix.target }}/
+          else
+            cp target/${{ matrix.target }}/release/libnever_jscore.a go_mod/never_jscore/lib/${{ matrix.target }}/
+            cp target/${{ matrix.target }}/release/libnever_jscore.so go_mod/never_jscore/lib/${{ matrix.target }}/
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: go_mod/never_jscore/lib/${{ matrix.target }}
